@@ -31,6 +31,12 @@ let ytPlayer = null;
 let currentSongKey = null;
 let currentVideoId = null;
 
+// Biến tính toán khoảng lệch thời gian giữa Máy tính & Server Firebase
+let serverTimeOffset = 0;
+db.ref('.info/serverTimeOffset').on('value', (snapshot) => {
+    serverTimeOffset = snapshot.val() || 0;
+});
+
 const peerConfig = {
     config: {
         iceServers: [
@@ -378,7 +384,7 @@ async function searchYouTube() {
     }
 }
 
-// B. Thêm bài hát vào Node queue của phòng trên Firebase
+// B. Thêm bài hát vào Queue
 function addToQueue(videoId, title) {
     if (!currentRoomId) return;
     db.ref(`rooms/${currentRoomId}/queue`).push({
@@ -388,7 +394,7 @@ function addToQueue(videoId, title) {
     });
 }
 
-// C. Lắng nghe cập nhật Queue và đồng bộ bài phát giữa các máy
+// C. Lắng nghe Queue & Đồng bộ mốc thời gian chuẩn Server
 function listenForMusicBox(roomId) {
     db.ref(`rooms/${roomId}/queue`).on('value', (snapshot) => {
         const queueData = snapshot.val();
@@ -410,7 +416,6 @@ function listenForMusicBox(roomId) {
         const keys = Object.keys(queueData);
         document.getElementById('queue-count').innerText = keys.length;
 
-        // Render danh sách hàng chờ
         keys.forEach((key, index) => {
             if (index > 0) {
                 const item = queueData[key];
@@ -421,36 +426,37 @@ function listenForMusicBox(roomId) {
             }
         });
 
-        // Lấy bài hát đầu tiên
         const firstKey = keys[0];
         const firstSong = queueData[firstKey];
 
-        // Nếu bài hát chưa có mốc thời gian bắt đầu -> Ghi mốc thời gian hiện tại vào Firebase
+        // Tạo timestamp chuẩn của Server Firebase cho bài hát mới
         if (!firstSong.startedAt) {
             db.ref(`rooms/${roomId}/queue/${firstKey}`).update({
-                startedAt: Date.now()
+                startedAt: firebase.database.ServerValue.TIMESTAMP
             });
             return;
         }
 
-        // Tính khoảng thời gian video đã phát (giây)
-        const elapsedSeconds = Math.max(0, (Date.now() - firstSong.startedAt) / 1000);
+        // Tính thời gian thực tế đã phát dựa theo Server Time
+        const currentServerTime = Date.now() + serverTimeOffset;
+        const elapsedSeconds = Math.max(0, (currentServerTime - firstSong.startedAt) / 1000);
 
         if (currentVideoId !== firstSong.videoId) {
             currentVideoId = firstSong.videoId;
             currentSongKey = firstKey;
             
-            // Phát video và tua trực tiếp tới mốc thời gian thực tế
             playYouTubeVideo(firstSong.videoId, firstSong.title, elapsedSeconds);
         }
     });
 }
 
-// D. Khởi tạo / Thay đổi Video phát YouTube (Bao gồm Fix Error 153 & Đồng bộ thời gian)
+// D. Khởi tạo / Thay đổi Video phát YouTube & Tua đúng vị trí
 function playYouTubeVideo(videoId, title, startSeconds = 0) {
     document.getElementById('selection-screen').classList.remove('active');
-    document.getElementById('lyric-screen').classList.active ? null : document.getElementById('lyric-screen').classList.add('active');
+    document.getElementById('lyric-screen').classList.add('active');
     document.getElementById('playing-song-info').innerText = `🎤 Đang phát: ${title}`;
+
+    const seekTime = Math.floor(startSeconds);
 
     if (!ytPlayer) {
         ytPlayer = new YT.Player('youtube-player', {
@@ -460,18 +466,24 @@ function playYouTubeVideo(videoId, title, startSeconds = 0) {
             playerVars: { 
                 'autoplay': 1, 
                 'controls': 1,
-                'start': Math.floor(startSeconds),
+                'start': seekTime,
                 'origin': window.location.origin || 'http://localhost'
             },
             host: 'https://www.youtube-nocookie.com',
             events: {
                 'onReady': (event) => {
                     event.target.playVideo();
-                    if (startSeconds > 0) {
-                        event.target.seekTo(startSeconds, true);
+                    if (seekTime > 0) {
+                        event.target.seekTo(seekTime, true);
                     }
                 },
                 'onStateChange': (event) => {
+                    // Khi video thực sự bắt đầu chạy (PLAYING), tua lại 1 lần nữa để đảm bảo đồng bộ
+                    if (event.data === YT.PlayerState.PLAYING) {
+                        if (seekTime > 0 && Math.abs(event.target.getCurrentTime() - seekTime) > 3) {
+                            event.target.seekTo(seekTime, true);
+                        }
+                    }
                     if (event.data === 0) { // Hết bài
                         skipSong();
                     }
@@ -481,8 +493,9 @@ function playYouTubeVideo(videoId, title, startSeconds = 0) {
     } else {
         ytPlayer.loadVideoById({
             videoId: videoId,
-            startSeconds: Math.floor(startSeconds)
+            startSeconds: seekTime
         });
+        ytPlayer.playVideo();
     }
 }
 
