@@ -75,34 +75,20 @@ const peerConfig = {
  * ==============================================================================
  */
 
-/**
- * Updates avatar selection in the UI state
- * @param {HTMLElement} element - Selected DOM element
- */
 function selectAvatar(element) {
     document.querySelectorAll('.avatar-item').forEach(item => item.classList.remove('selected'));
     element.classList.add('selected');
     selectedAvatar = element.innerText;
 }
 
-/**
- * Displays the administrative authentication modal
- */
 function openAdminModal() {
     document.getElementById('admin-modal').style.display = 'flex';
 }
 
-/**
- * Hides the administrative authentication modal
- */
 function closeAdminModal() {
     document.getElementById('admin-modal').style.display = 'none';
 }
 
-/**
- * Validates admin security token and upgrades user privilege
- * @param {Event} e - Form submission event
- */
 function handleAdminSubmit(e) {
     e.preventDefault();
     const inputCode = document.getElementById('admin-code-input').value.trim();
@@ -122,9 +108,6 @@ function handleAdminSubmit(e) {
  * ==============================================================================
  */
 
-/**
- * Creates a new room instance in Realtime Database as Host
- */
 async function createRoom() {
     const roomId = document.getElementById('room-id').value.trim();
     const roomPass = document.getElementById('room-pass').value.trim();
@@ -141,9 +124,6 @@ async function createRoom() {
     enterRoomProcess(roomId, userName);
 }
 
-/**
- * Authenticates user credentials and enters an existing room
- */
 async function joinRoom() {
     const roomId = document.getElementById('room-id').value.trim();
     const roomPass = document.getElementById('room-pass').value.trim();
@@ -159,11 +139,6 @@ async function joinRoom() {
     enterRoomProcess(roomId, userName);
 }
 
-/**
- * Initializes session components and transitions UI to active room state
- * @param {string} roomId - Current active room identifier
- * @param {string} userName - User display name
- */
 async function enterRoomProcess(roomId, userName) {
     currentRoomId = roomId;
 
@@ -182,19 +157,14 @@ async function enterRoomProcess(roomId, userName) {
     listenForMusicBox(roomId);
 }
 
-/**
- * Adjusts administrative control visibility depending on authorization state
- */
 function updateAdminControlsUI() {
     const btnSkip = document.getElementById('btn-skip-song');
     if (btnSkip) {
-        btnSkip.style.display = isAdmin ? 'inline-block' : 'none';
+        // Cho phép tất cả mọi người nhìn thấy và bấm chuyển bài
+        btnSkip.style.display = 'inline-block';
     }
 }
 
-/**
- * Requests client hardware access for local MediaStream initialization
- */
 async function initMedia() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -218,10 +188,6 @@ async function initMedia() {
  * ==============================================================================
  */
 
-/**
- * Configures PeerJS instance and registers signalling handlers
- * @param {string} userName - User display name
- */
 function initPeerJS(userName) {
     peer = new Peer(myUserId, peerConfig);
 
@@ -250,9 +216,6 @@ function initPeerJS(userName) {
     });
 }
 
-/**
- * Subscribes to database user lifecycle events (Join, Update, Leave)
- */
 function listenForUsers() {
     const usersRef = db.ref(`rooms/${currentRoomId}/users`);
 
@@ -290,11 +253,6 @@ function listenForUsers() {
     });
 }
 
-/**
- * Binds incoming MediaStream object to specified remote HTML Video Element
- * @param {string} userId - Remote peer identity key
- * @param {MediaStream} stream - WebRTC remote media stream
- */
 function addRemoteStream(userId, stream) {
     const remoteVideo = document.getElementById(`video-${userId}`);
     if (remoteVideo) {
@@ -308,12 +266,6 @@ function addRemoteStream(userId, stream) {
     }
 }
 
-/**
- * Dynamically inserts a participant DOM node into the video grid
- * @param {string} userId - Unique participant identifier
- * @param {string} userName - Display name
- * @param {string} avatar - Selected emoji avatar
- */
 function createRemoteUserCard(userId, userName, avatar) {
     if (document.getElementById(`card-${userId}`)) return;
 
@@ -334,21 +286,11 @@ function createRemoteUserCard(userId, userName, avatar) {
     container.appendChild(userCard);
 }
 
-/**
- * Removes user component node from grid upon disconnection
- * @param {string} userId - Target peer identifier
- */
 function removeRemoteUserCard(userId) {
     const card = document.getElementById(`card-${userId}`);
     if (card) card.remove();
 }
 
-/**
- * Synchronizes client media hardware state indicators in the DOM
- * @param {string} userId - Target user identifier
- * @param {boolean} micActive - Microphone active flag
- * @param {boolean} camActive - Camera active flag
- */
 function updateUserStatusUI(userId, micActive, camActive) {
     let micBadge, camBadge, remoteVideo, remoteAvatar;
 
@@ -384,9 +326,6 @@ function updateUserStatusUI(userId, micActive, camActive) {
  * ==============================================================================
  */
 
-/**
- * Toggles microphone track state and notifies network node
- */
 function toggleMic() {
     if (!localStream) return;
     const audioTrack = localStream.getAudioTracks()[0];
@@ -403,9 +342,6 @@ function toggleMic() {
     }
 }
 
-/**
- * Toggles camera track state and notifies network node
- */
 function toggleCam() {
     if (!localStream) return;
     const videoTrack = localStream.getVideoTracks()[0];
@@ -422,19 +358,11 @@ function toggleCam() {
     }
 }
 
-/**
- * Updates UI control button presentation for Microphone
- * @param {boolean} on - Enabled state
- */
 function updateMicUI(on) {
     document.getElementById('mic-label').innerText = on ? "Tắt Mic" : "Bật Mic";
     document.getElementById('mic-btn').classList.toggle('off', !on);
 }
 
-/**
- * Updates UI control button presentation for Camera
- * @param {boolean} on - Enabled state
- */
 function updateCamUI(on) {
     document.getElementById('local-video').style.display = on ? 'block' : 'none';
     document.getElementById('local-avatar').style.display = on ? 'none' : 'flex';
@@ -448,9 +376,6 @@ function updateCamUI(on) {
  * ==============================================================================
  */
 
-/**
- * Queries YouTube Data API v3 for search terms matching Karaoke tracks
- */
 async function searchYouTube() {
     const input = document.getElementById('song-search');
     const query = input.value.trim();
@@ -508,11 +433,6 @@ async function searchYouTube() {
     }
 }
 
-/**
- * Appends selected video metadata payload into room queue node
- * @param {string} videoId - YouTube Video ID
- * @param {string} title - Media Title
- */
 function addToQueue(videoId, title) {
     if (!currentRoomId) return;
     db.ref(`rooms/${currentRoomId}/queue`).push({
@@ -522,10 +442,6 @@ function addToQueue(videoId, title) {
     });
 }
 
-/**
- * Establishes real-time listener for current room playback queue state changes
- * @param {string} roomId - Current room ID
- */
 function listenForMusicBox(roomId) {
     db.ref(`rooms/${roomId}/queue`).on('value', (snapshot) => {
         const queueData = snapshot.val();
@@ -569,11 +485,6 @@ function listenForMusicBox(roomId) {
     });
 }
 
-/**
- * Instantiates or reloads YouTube iFrame Player API for video rendering
- * @param {string} videoId - YouTube Video ID
- * @param {string} title - Song title for display
- */
 function playYouTubeVideo(videoId, title) {
     document.getElementById('selection-screen').classList.remove('active');
     document.getElementById('lyric-screen').classList.add('active');
@@ -586,7 +497,7 @@ function playYouTubeVideo(videoId, title) {
             videoId: videoId,
             playerVars: { 
                 'autoplay': 1, 
-                'controls': isAdmin ? 1 : 0,
+                'controls': 1, // Tất cả người dùng đều có thanh điều khiển trên video
                 'origin': window.location.origin || 'http://localhost'
             },
             host: 'https://www.youtube-nocookie.com',
@@ -595,10 +506,7 @@ function playYouTubeVideo(videoId, title) {
                     event.target.playVideo();
                 },
                 'onStateChange': (event) => {
-                    if (!isAdmin && event.data === YT.PlayerState.PAUSED) {
-                        ytPlayer.playVideo();
-                    }
-                    if (event.data === 0) {
+                    if (event.data === 0) { // Khi video phát hết tự chuyển bài tiếp
                         skipSong();
                     }
                 }
@@ -610,21 +518,12 @@ function playYouTubeVideo(videoId, title) {
     }
 }
 
-/**
- * Removes active song from queue (Restricted to Room Host/Admin)
- */
+// Bất kỳ ai bấm nút này cũng sẽ xóa bài hát hiện tại khỏi danh sách chờ để chuyển sang bài tiếp theo
 function skipSong() {
-    if (!isAdmin) {
-        alert("Chỉ Admin mới có quyền bỏ qua / dừng bài hát!");
-        return;
-    }
     if (!currentRoomId || !currentSongKey) return;
     db.ref(`rooms/${currentRoomId}/queue/${currentSongKey}`).remove();
 }
 
-/**
- * Gracefully terminates WebRTC connections, clears user state and reloads session
- */
 function leaveRoom() {
     if (currentRoomId) db.ref(`rooms/${currentRoomId}/users/${myUserId}`).remove();
     if (localStream) localStream.getTracks().forEach(t => t.stop());
