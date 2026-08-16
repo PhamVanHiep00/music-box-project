@@ -30,13 +30,7 @@ let calls = {};
 let ytPlayer = null;
 let currentSongKey = null;
 let currentVideoId = null;
-let hasSynced = false; // Cờ đánh dấu đã tua đồng bộ xong bài hát hiện tại chưa
-
-// Lệch thời gian Server
-let serverTimeOffset = 0;
-db.ref('.info/serverTimeOffset').on('value', (snapshot) => {
-    serverTimeOffset = snapshot.val() || 0;
-});
+let isAdmin = false; // Cờ kiểm tra xem người dùng hiện tại có phải Admin hay không
 
 const peerConfig = {
     config: {
@@ -76,6 +70,7 @@ function handleAdminSubmit(e) {
     const inputCode = document.getElementById('admin-code-input').value.trim();
     if (inputCode === MY_ADMIN_CODE) {
         alert("Xác thực Admin thành công!");
+        isAdmin = true;
         document.getElementById('btn-create-room').style.display = 'block';
         closeAdminModal();
     } else {
@@ -95,7 +90,8 @@ async function createRoom() {
     const snapshot = await roomRef.once('value');
     if (snapshot.exists()) return alert("ID Phòng đã tồn tại!");
 
-    await roomRef.set({ password: roomPass });
+    isAdmin = true; // Người tạo phòng mặc định là Admin
+    await roomRef.set({ password: roomPass, hostId: myUserId });
     enterRoomProcess(roomId, userName);
 }
 
@@ -119,16 +115,26 @@ async function enterRoomProcess(roomId, userName) {
     currentRoomId = roomId;
 
     document.getElementById('display-room-id').innerText = roomId;
-    document.getElementById('local-name-tag').innerText = userName + " (Bạn)";
+    document.getElementById('local-name-tag').innerText = userName + (isAdmin ? " (Admin)" : " (Bạn)");
     document.getElementById('local-avatar').innerText = selectedAvatar;
 
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('room-screen').style.display = 'flex';
 
+    // Cập nhật giao diện nút Skip/Next tùy thuộc vào Admin
+    updateAdminControlsUI();
+
     await initMedia();
     initPeerJS(userName);
 
     listenForMusicBox(roomId);
+}
+
+function updateAdminControlsUI() {
+    const btnSkip = document.getElementById('btn-skip-song');
+    if (btnSkip) {
+        btnSkip.style.display = isAdmin ? 'inline-block' : 'none';
+    }
 }
 
 async function initMedia() {
@@ -158,7 +164,8 @@ function initPeerJS(userName) {
             name: userName, 
             avatar: selectedAvatar,
             isMicOn: isMicOn, 
-            isCamOn: isCamOn 
+            isCamOn: isCamOn,
+            isAdmin: isAdmin
         });
         myUserRef.onDisconnect().remove();
 
@@ -395,7 +402,7 @@ function addToQueue(videoId, title) {
     });
 }
 
-// C. Lắng nghe Queue & Đồng bộ mốc thời gian
+// C. Lắng nghe Queue bài hát (Đã loại bỏ mã đồng bộ tua phức tạp)
 function listenForMusicBox(roomId) {
     db.ref(`rooms/${roomId}/queue`).on('value', (snapshot) => {
         const queueData = snapshot.val();
@@ -430,35 +437,20 @@ function listenForMusicBox(roomId) {
         const firstKey = keys[0];
         const firstSong = queueData[firstKey];
 
-        // 1. Tạo timestamp chuẩn của Server Firebase cho bài hát mới
-        if (!firstSong.startedAt) {
-            db.ref(`rooms/${roomId}/queue/${firstKey}`).update({
-                startedAt: firebase.database.ServerValue.TIMESTAMP
-            });
-            return;
-        }
-
-        // 2. Tính thời gian thực tế đã trôi qua
-        const currentServerTime = Date.now() + serverTimeOffset;
-        const elapsedSeconds = Math.max(0, (currentServerTime - firstSong.startedAt) / 1000);
-
         if (currentVideoId !== firstSong.videoId) {
             currentVideoId = firstSong.videoId;
             currentSongKey = firstKey;
-            hasSynced = false; // Đặt lại trạng thái chưa đồng bộ cho bài hát mới
             
-            playYouTubeVideo(firstSong.videoId, firstSong.title, elapsedSeconds);
+            playYouTubeVideo(firstSong.videoId, firstSong.title);
         }
     });
 }
 
-// D. Khởi tạo / Phát Video YouTube và Đồng bộ ĐÚNG 1 LẦN DUY NHẤT
-function playYouTubeVideo(videoId, title, startSeconds = 0) {
+// D. Khởi tạo / Phát Video YouTube đơn giản
+function playYouTubeVideo(videoId, title) {
     document.getElementById('selection-screen').classList.remove('active');
     document.getElementById('lyric-screen').classList.add('active');
     document.getElementById('playing-song-info').innerText = `🎤 Đang phát: ${title}`;
-
-    const seekTime = Math.floor(startSeconds);
 
     if (!ytPlayer) {
         ytPlayer = new YT.Player('youtube-player', {
@@ -467,8 +459,7 @@ function playYouTubeVideo(videoId, title, startSeconds = 0) {
             videoId: videoId,
             playerVars: { 
                 'autoplay': 1, 
-                'controls': 1,
-                'start': seekTime,
+                'controls': isAdmin ? 1 : 0, // Chỉ Admin mới hiện bộ điều khiển (Play/Pause/Tua) của YouTube
                 'origin': window.location.origin || 'http://localhost'
             },
             host: 'https://www.youtube-nocookie.com',
@@ -477,30 +468,28 @@ function playYouTubeVideo(videoId, title, startSeconds = 0) {
                     event.target.playVideo();
                 },
                 'onStateChange': (event) => {
-                    // CHỈ TUA ĐỒNG BỘ 1 LẦN DUY NHẤT KHI BẮT ĐẦU PHÁT (TRÁNH LẶP)
-                    if (event.data === YT.PlayerState.PLAYING && !hasSynced) {
-                        hasSynced = true; // Đánh dấu đã tua xong
-                        if (seekTime > 2) {
-                            event.target.seekTo(seekTime, true);
-                        }
+                    // Nếu không phải Admin mà cố tình bấm Pause/Stop, tự động phát tiếp
+                    if (!isAdmin && event.data === YT.PlayerState.PAUSED) {
+                        ytPlayer.playVideo();
                     }
-                    if (event.data === 0) { // Hết bài (ENDED)
+                    if (event.data === 0) { // Hết bài
                         skipSong();
                     }
                 }
             }
         });
     } else {
-        ytPlayer.loadVideoById({
-            videoId: videoId,
-            startSeconds: seekTime
-        });
+        ytPlayer.loadVideoById(videoId);
         ytPlayer.playVideo();
     }
 }
 
-// E. Bỏ qua bài hát hiện tại
+// E. Bỏ qua / Dừng bài hát hiện tại (Chỉ Admin)
 function skipSong() {
+    if (!isAdmin) {
+        alert("Chỉ Admin mới có quyền bỏ qua / dừng bài hát!");
+        return;
+    }
     if (!currentRoomId || !currentSongKey) return;
     db.ref(`rooms/${currentRoomId}/queue/${currentSongKey}`).remove();
 }
