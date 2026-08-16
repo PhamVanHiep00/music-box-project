@@ -15,7 +15,7 @@ const db = firebase.database();
 
 const MY_ADMIN_CODE = "admin123";
 
-// --- 2. BIẾN PHÒNG & KẾT NỐI WEBRTC ---
+// --- 2. BIẾN PHÒNG & WEBRTC CẤU HÌNH BỔ SUNG TURN SERVER ---
 let localStream = null;
 let isMicOn = true;
 let isCamOn = true;
@@ -24,7 +24,13 @@ let myUserId = "user_" + Math.random().toString(36).substr(2, 9);
 let peerConnections = {};
 
 const rtcConfig = {
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" }
+    ]
 };
 
 // --- 3. QUẢN LÝ POPUP ADMIN ---
@@ -137,15 +143,18 @@ async function enterRoomProcess(roomId, userName) {
 
     myUserRef.onDisconnect().remove();
 
-    listenForUsers(roomId, userName);
-    listenForWebRTC(roomId);
+    listenForUsers(roomId);
+    listenForSignaling(roomId);
     listenForMusicBox(roomId);
 }
 
 async function initMedia() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById('local-video').srcObject = localStream;
+        const localVideo = document.getElementById('local-video');
+        localVideo.srcObject = localStream;
+        localVideo.muted = true; // Bắt buộc mute video chính mình để tránh vọng tiếng
+        
         isMicOn = true;
         isCamOn = true;
         updateMicUI(true);
@@ -161,62 +170,105 @@ async function initMedia() {
     }
 }
 
-// --- 6. LOGIC CHỌN BÀI HÁT & ĐỔI BÀI (MUSIC BOX) ---
-function filterSongs() {
-    const query = document.getElementById('song-search').value.toLowerCase();
-    const items = document.querySelectorAll('.song-item');
-    items.forEach(item => {
-        const title = item.querySelector('.song-title').innerText.toLowerCase();
-        const artist = item.querySelector('.song-artist').innerText.toLowerCase();
-        if (title.includes(query) || artist.includes(query)) {
-            item.style.display = 'flex';
-        } else {
-            item.style.display = 'none';
+// --- 6. XỬ LÝ WEBRTC HOÀN CHỈNH ---
+function createPeerConnection(remoteUserId) {
+    if (peerConnections[remoteUserId]) return peerConnections[remoteUserId];
+
+    const pc = new RTCPeerConnection(rtcConfig);
+    peerConnections[remoteUserId] = pc;
+
+    // Gửi tracks của mình sang cho remote user
+    if (localStream) {
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    }
+
+    // Nhận stream từ remote user
+    pc.ontrack = (event) => {
+        const remoteVideo = document.getElementById(`video-${remoteUserId}`);
+        if (remoteVideo) {
+            remoteVideo.srcObject = event.streams[0];
+            remoteVideo.autoplay = true;
+            remoteVideo.playsInline = true;
+            
+            // Tự động phát âm thanh/video
+            remoteVideo.play().catch(e => {
+                console.log("Trình duyệt chặn tự động phát, thử phát lại...", e);
+                document.addEventListener('click', () => remoteVideo.play(), { once: true });
+            });
         }
+    };
+
+    // Gửi ICE Candidates
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            db.ref(`rooms/${currentRoomId}/candidates/${remoteUserId}/${myUserId}`).push(event.candidate.toJSON());
+        }
+    };
+
+    return pc;
+}
+
+async function makeOffer(remoteUserId) {
+    const pc = createPeerConnection(remoteUserId);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    db.ref(`rooms/${currentRoomId}/offers/${remoteUserId}/${myUserId}`).set({
+        type: offer.type,
+        sdp: offer.sdp
     });
 }
 
-function startKaraoke(title, artist) {
-    const songData = { title, artist, isPlaying: true };
-    if (currentRoomId) {
-        db.ref(`rooms/${currentRoomId}/currentSong`).set(songData);
-    } else {
-        renderKaraokeUI(songData);
-    }
-}
+function listenForSignaling(roomId) {
+    // 1. Lắng nghe Offer gửi tới mình
+    db.ref(`rooms/${roomId}/offers/${myUserId}`).on('child_added', async (snapshot) => {
+        const fromUserId = snapshot.key;
+        const offer = snapshot.val();
 
-function returnToSelection() {
-    if (currentRoomId) {
-        db.ref(`rooms/${currentRoomId}/currentSong`).set({ isPlaying: false });
-    } else {
-        renderSelectionUI();
-    }
-}
+        const pc = createPeerConnection(fromUserId);
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
 
-function renderKaraokeUI(songData) {
-    document.getElementById('selection-screen').classList.remove('active');
-    document.getElementById('lyric-screen').classList.add('active');
-    document.getElementById('playing-song-info').innerText = `🎤 Đang hát: ${songData.title} - ${songData.artist}`;
-}
+        db.ref(`rooms/${roomId}/answers/${fromUserId}/${myUserId}`).set({
+            type: answer.type,
+            sdp: answer.sdp
+        });
+    });
 
-function renderSelectionUI() {
-    document.getElementById('lyric-screen').classList.remove('active');
-    document.getElementById('selection-screen').classList.add('active');
-}
+    // 2. Lắng nghe Answer trả về cho Offer của mình
+    db.ref(`rooms/${roomId}/answers/${myUserId}`).on('child_added', async (snapshot) => {
+        const fromUserId = snapshot.key;
+        const answer = snapshot.val();
+        const pc = peerConnections[fromUserId];
 
-function listenForMusicBox(roomId) {
-    db.ref(`rooms/${roomId}/currentSong`).on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data && data.isPlaying) {
-            renderKaraokeUI(data);
-        } else {
-            renderSelectionUI();
+        if (pc && !pc.currentRemoteDescription) {
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
         }
+    });
+
+    // 3. Lắng nghe ICE Candidates
+    db.ref(`rooms/${roomId}/candidates/${myUserId}`).on('child_added', (snapshot) => {
+        const fromUserId = snapshot.key;
+        
+        db.ref(`rooms/${roomId}/candidates/${myUserId}/${fromUserId}`).on('child_added', async (candidateSnap) => {
+            const candidateData = candidateSnap.val();
+            const pc = peerConnections[fromUserId];
+            
+            if (pc && candidateData) {
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(candidateData));
+                } catch (e) {
+                    console.error("Lỗi thêm ICE Candidate:", e);
+                }
+            }
+        });
     });
 }
 
-// --- 7. LẮNG NGHE NGƯỜI DÙNG & WEBRTC ---
-function listenForUsers(roomId, myName) {
+// --- 7. LẮNG NGHE NGƯỜI DÙNG VÀ TẠO KHUNG ---
+function listenForUsers(roomId) {
     const usersRef = db.ref(`rooms/${roomId}/users`);
 
     usersRef.on('child_added', (snapshot) => {
@@ -226,7 +278,9 @@ function listenForUsers(roomId, myName) {
         if (userId !== myUserId) {
             createRemoteUserCard(userId, userData.name);
             updateUserStatusUI(userId, userData.isMicOn, userData.isCamOn);
-            initPeerConnection(userId, true);
+            
+            // Người vào sau chủ động kết nối tới người vào trước
+            makeOffer(userId);
         }
     });
 
@@ -302,104 +356,68 @@ function updateUserStatusUI(userId, micActive, camActive) {
     }
 }
 
-function initPeerConnection(remoteUserId, isInitiator) {
-    const pc = new RTCPeerConnection(rtcConfig);
-    peerConnections[remoteUserId] = pc;
-
-    if (localStream) {
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-    }
-
-    pc.ontrack = (event) => {
-        const remoteVideo = document.getElementById(`video-${remoteUserId}`);
-        if (remoteVideo && event.streams[0]) {
-            remoteVideo.srcObject = event.streams[0];
-        }
-    };
-
-    pc.onicecandidate = (event) => {
-        if (event.candidate) {
-            db.ref(`rooms/${currentRoomId}/signaling/${remoteUserId}/${myUserId}/candidates`).push(event.candidate.toJSON());
-        }
-    };
-
-    if (isInitiator) {
-        pc.createOffer().then(offer => {
-            pc.setLocalDescription(offer);
-            db.ref(`rooms/${currentRoomId}/signaling/${remoteUserId}/${myUserId}/offer`).set(offer);
-        });
-    }
-}
-
-function listenForWebRTC(roomId) {
-    const signalRef = db.ref(`rooms/${roomId}/signaling/${myUserId}`);
-
-    signalRef.on('child_added', (snapshot) => {
-        const fromUserId = snapshot.key;
-        const data = snapshot.val();
-
-        if (!peerConnections[fromUserId]) {
-            initPeerConnection(fromUserId, false);
-        }
-        const pc = peerConnections[fromUserId];
-
-        if (data.offer && !pc.currentRemoteDescription) {
-            pc.setRemoteDescription(new RTCSessionDescription(data.offer)).then(() => {
-                return pc.createAnswer();
-            }).then(answer => {
-                pc.setLocalDescription(answer);
-                db.ref(`rooms/${roomId}/signaling/${fromUserId}/${myUserId}/answer`).set(answer);
-            });
-        }
-
-        if (data.answer && !pc.currentRemoteDescription) {
-            pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-        }
-    });
-
-    db.ref(`rooms/${roomId}/signaling/${myUserId}`).on('child_changed', (snapshot) => {
-        const fromUserId = snapshot.key;
-        const data = snapshot.val();
-        const pc = peerConnections[fromUserId];
-
-        if (pc && data.candidates) {
-            Object.values(data.candidates).forEach(candidate => {
-                pc.addIceCandidate(new RTCIceCandidate(candidate));
-            });
+// --- 8. KHUNG CHỌN BÀI HÁT & LYRIC ---
+function filterSongs() {
+    const query = document.getElementById('song-search').value.toLowerCase();
+    const items = document.querySelectorAll('.song-item');
+    items.forEach(item => {
+        const title = item.querySelector('.song-title').innerText.toLowerCase();
+        const artist = item.querySelector('.song-artist').innerText.toLowerCase();
+        if (title.includes(query) || artist.includes(query)) {
+            item.style.display = 'flex';
+        } else {
+            item.style.display = 'none';
         }
     });
 }
 
-// --- 8. TẮT / BẬT MIC VÀ CAM ---
-async function toggleMic() {
-    if (isMicOn) {
-        if (localStream) {
-            const audioTrack = localStream.getAudioTracks()[0];
-            if (audioTrack) {
-                audioTrack.stop();
-                localStream.removeTrack(audioTrack);
-            }
-        }
-        isMicOn = false;
+function startKaraoke(title, artist) {
+    const songData = { title, artist, isPlaying: true };
+    if (currentRoomId) {
+        db.ref(`rooms/${currentRoomId}/currentSong`).set(songData);
     } else {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const track = stream.getAudioTracks()[0];
-            if (!localStream) localStream = new MediaStream();
-            localStream.addTrack(track);
+        renderKaraokeUI(songData);
+    }
+}
 
-            Object.values(peerConnections).forEach(pc => {
-                const senders = pc.getSenders();
-                const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-                if (audioSender) audioSender.replaceTrack(track);
-                else pc.addTrack(track, localStream);
-            });
+function returnToSelection() {
+    if (currentRoomId) {
+        db.ref(`rooms/${currentRoomId}/currentSong`).set({ isPlaying: false });
+    } else {
+        renderSelectionUI();
+    }
+}
 
-            isMicOn = true;
-        } catch (e) {
-            alert("Không thể mở Micro!");
-            return;
+function renderKaraokeUI(songData) {
+    document.getElementById('selection-screen').classList.remove('active');
+    document.getElementById('lyric-screen').classList.add('active');
+    document.getElementById('playing-song-info').innerText = `🎤 Đang hát: ${songData.title} - ${songData.artist}`;
+}
+
+function renderSelectionUI() {
+    document.getElementById('lyric-screen').classList.remove('active');
+    document.getElementById('selection-screen').classList.add('active');
+}
+
+function listenForMusicBox(roomId) {
+    db.ref(`rooms/${roomId}/currentSong`).on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data && data.isPlaying) {
+            renderKaraokeUI(data);
+        } else {
+            renderSelectionUI();
         }
+    });
+}
+
+// --- 9. ĐIỀU KHIỂN BẬT / TẮT MIC & CAM ---
+async function toggleMic() {
+    if (!localStream) return;
+    const audioTrack = localStream.getAudioTracks()[0];
+
+    if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        isMicOn = audioTrack.enabled;
     }
 
     updateMicUI(isMicOn);
@@ -410,36 +428,12 @@ async function toggleMic() {
 }
 
 async function toggleCam() {
-    if (isCamOn) {
-        if (localStream) {
-            const videoTrack = localStream.getVideoTracks()[0];
-            if (videoTrack) {
-                videoTrack.stop();
-                localStream.removeTrack(videoTrack);
-            }
-        }
-        isCamOn = false;
-    } else {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            const track = stream.getVideoTracks()[0];
-            if (!localStream) localStream = new MediaStream();
-            localStream.addTrack(track);
+    if (!localStream) return;
+    const videoTrack = localStream.getVideoTracks()[0];
 
-            document.getElementById('local-video').srcObject = localStream;
-
-            Object.values(peerConnections).forEach(pc => {
-                const senders = pc.getSenders();
-                const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-                if (videoSender) videoSender.replaceTrack(track);
-                else pc.addTrack(track, localStream);
-            });
-
-            isCamOn = true;
-        } catch (e) {
-            alert("Không thể mở Camera!");
-            return;
-        }
+    if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        isCamOn = videoTrack.enabled;
     }
 
     updateCamUI(isCamOn);

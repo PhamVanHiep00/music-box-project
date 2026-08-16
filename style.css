@@ -261,7 +261,7 @@ body {
 .lyric-line.active { color: #ffeb3b; font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px rgba(255, 235, 59, 0.5); }
 .lyric-line.upcoming { color: #aaa; font-size: 0.95rem; }
 
-/* KHUNG CAMERA NGƯỜI THAM GIA (ĐÃ TĂNG KÍCH THƯỚC) */
+/* KHUNG CAMERA NGƯỜI THAM GIA */
 .participants-grid {
     display: flex;
     flex-wrap: wrap;
@@ -272,8 +272,8 @@ body {
 }
 
 .user-card {
-    width: 320px; /* Đã tăng kích thước chiều rộng */
-    height: 220px; /* Đã tăng kích thước chiều cao */
+    width: 320px;
+    height: 220px;
     background: #2a2a40;
     border-radius: 16px;
     position: relative;
