@@ -1,4 +1,10 @@
-// --- 1. CẤU HÌNH FIREBASE ---
+/**
+ * ==============================================================================
+ * Global Configurations & Environment Variables
+ * ==============================================================================
+ */
+
+// Firebase Service Configurations
 const firebaseConfig = {
   apiKey: "AIzaSyA5e5QwVu0cKXRLx743cEk74J4xPiEp9qA",
   authDomain: "music-box-87234.firebaseapp.com",
@@ -9,29 +15,41 @@ const firebaseConfig = {
   appId: "1:659368332742:web:277268d8c509ededbdb6c7"
 };
 
+// Initialize Firebase Realtime Database Instance
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+// Administrative Credentials & External API Keys
 const MY_ADMIN_CODE = "admin123";
-
-// 🔑 YOUTUBE DATA API V3 KEY CỦA BẠN
 const YOUTUBE_API_KEY = "AIzaSyBy9wjn6KtQMurf7P_aYtXNfwfJKzq52xA";
 
-// --- 2. BIẾN PHÒNG, AVATAR, PEERJS & YOUTUBE ---
+/**
+ * ==============================================================================
+ * Application State Management Variables
+ * ==============================================================================
+ */
+
+// Local Media Stream & Hardware States
 let localStream = null;
 let isMicOn = true;
 let isCamOn = true;
-let selectedAvatar = "🐱"; 
+let selectedAvatar = "🐱";
+
+// User & Session Identity
 let currentRoomId = null;
 let myUserId = "user_" + Math.random().toString(36).substr(2, 6);
+let isAdmin = false;
+
+// PeerJS Connection Pool & Signalling
 let peer = null;
 let calls = {};
 
+// YouTube Embedded Player & Queue Controller
 let ytPlayer = null;
 let currentSongKey = null;
 let currentVideoId = null;
-let isAdmin = false; // Cờ kiểm tra xem người dùng hiện tại có phải Admin hay không
 
+// PeerJS ICE Server Topology Configuration
 const peerConfig = {
     config: {
         iceServers: [
@@ -51,20 +69,40 @@ const peerConfig = {
     }
 };
 
-// --- 3. CHỌN AVATAR ---
+/**
+ * ==============================================================================
+ * User Profile & UI Event Handlers
+ * ==============================================================================
+ */
+
+/**
+ * Updates avatar selection in the UI state
+ * @param {HTMLElement} element - Selected DOM element
+ */
 function selectAvatar(element) {
     document.querySelectorAll('.avatar-item').forEach(item => item.classList.remove('selected'));
     element.classList.add('selected');
     selectedAvatar = element.innerText;
 }
 
-// --- 4. QUẢN LÝ POPUP ADMIN ---
+/**
+ * Displays the administrative authentication modal
+ */
 function openAdminModal() {
     document.getElementById('admin-modal').style.display = 'flex';
 }
+
+/**
+ * Hides the administrative authentication modal
+ */
 function closeAdminModal() {
     document.getElementById('admin-modal').style.display = 'none';
 }
+
+/**
+ * Validates admin security token and upgrades user privilege
+ * @param {Event} e - Form submission event
+ */
 function handleAdminSubmit(e) {
     e.preventDefault();
     const inputCode = document.getElementById('admin-code-input').value.trim();
@@ -78,7 +116,15 @@ function handleAdminSubmit(e) {
     }
 }
 
-// --- 5. THAM GIA & TẠO PHÒNG ---
+/**
+ * ==============================================================================
+ * Room Lifecycle & Realtime Database Synchronization
+ * ==============================================================================
+ */
+
+/**
+ * Creates a new room instance in Realtime Database as Host
+ */
 async function createRoom() {
     const roomId = document.getElementById('room-id').value.trim();
     const roomPass = document.getElementById('room-pass').value.trim();
@@ -90,11 +136,14 @@ async function createRoom() {
     const snapshot = await roomRef.once('value');
     if (snapshot.exists()) return alert("ID Phòng đã tồn tại!");
 
-    isAdmin = true; // Người tạo phòng mặc định là Admin
+    isAdmin = true;
     await roomRef.set({ password: roomPass, hostId: myUserId });
     enterRoomProcess(roomId, userName);
 }
 
+/**
+ * Authenticates user credentials and enters an existing room
+ */
 async function joinRoom() {
     const roomId = document.getElementById('room-id').value.trim();
     const roomPass = document.getElementById('room-pass').value.trim();
@@ -110,7 +159,11 @@ async function joinRoom() {
     enterRoomProcess(roomId, userName);
 }
 
-// --- 6. TIẾN TRÌNH TRONG PHÒNG ---
+/**
+ * Initializes session components and transitions UI to active room state
+ * @param {string} roomId - Current active room identifier
+ * @param {string} userName - User display name
+ */
 async function enterRoomProcess(roomId, userName) {
     currentRoomId = roomId;
 
@@ -121,7 +174,6 @@ async function enterRoomProcess(roomId, userName) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('room-screen').style.display = 'flex';
 
-    // Cập nhật giao diện nút Skip/Next tùy thuộc vào Admin
     updateAdminControlsUI();
 
     await initMedia();
@@ -130,6 +182,9 @@ async function enterRoomProcess(roomId, userName) {
     listenForMusicBox(roomId);
 }
 
+/**
+ * Adjusts administrative control visibility depending on authorization state
+ */
 function updateAdminControlsUI() {
     const btnSkip = document.getElementById('btn-skip-song');
     if (btnSkip) {
@@ -137,6 +192,9 @@ function updateAdminControlsUI() {
     }
 }
 
+/**
+ * Requests client hardware access for local MediaStream initialization
+ */
 async function initMedia() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -154,7 +212,16 @@ async function initMedia() {
     updateCamUI(isCamOn);
 }
 
-// --- 7. KẾT NỐI PEERJS ---
+/**
+ * ==============================================================================
+ * WebRTC Peer-to-Peer Signaling & Mesh Network Management
+ * ==============================================================================
+ */
+
+/**
+ * Configures PeerJS instance and registers signalling handlers
+ * @param {string} userName - User display name
+ */
 function initPeerJS(userName) {
     peer = new Peer(myUserId, peerConfig);
 
@@ -183,6 +250,9 @@ function initPeerJS(userName) {
     });
 }
 
+/**
+ * Subscribes to database user lifecycle events (Join, Update, Leave)
+ */
 function listenForUsers() {
     const usersRef = db.ref(`rooms/${currentRoomId}/users`);
 
@@ -220,6 +290,11 @@ function listenForUsers() {
     });
 }
 
+/**
+ * Binds incoming MediaStream object to specified remote HTML Video Element
+ * @param {string} userId - Remote peer identity key
+ * @param {MediaStream} stream - WebRTC remote media stream
+ */
 function addRemoteStream(userId, stream) {
     const remoteVideo = document.getElementById(`video-${userId}`);
     if (remoteVideo) {
@@ -233,6 +308,12 @@ function addRemoteStream(userId, stream) {
     }
 }
 
+/**
+ * Dynamically inserts a participant DOM node into the video grid
+ * @param {string} userId - Unique participant identifier
+ * @param {string} userName - Display name
+ * @param {string} avatar - Selected emoji avatar
+ */
 function createRemoteUserCard(userId, userName, avatar) {
     if (document.getElementById(`card-${userId}`)) return;
 
@@ -253,11 +334,21 @@ function createRemoteUserCard(userId, userName, avatar) {
     container.appendChild(userCard);
 }
 
+/**
+ * Removes user component node from grid upon disconnection
+ * @param {string} userId - Target peer identifier
+ */
 function removeRemoteUserCard(userId) {
     const card = document.getElementById(`card-${userId}`);
     if (card) card.remove();
 }
 
+/**
+ * Synchronizes client media hardware state indicators in the DOM
+ * @param {string} userId - Target user identifier
+ * @param {boolean} micActive - Microphone active flag
+ * @param {boolean} camActive - Camera active flag
+ */
 function updateUserStatusUI(userId, micActive, camActive) {
     let micBadge, camBadge, remoteVideo, remoteAvatar;
 
@@ -287,7 +378,15 @@ function updateUserStatusUI(userId, micActive, camActive) {
     }
 }
 
-// --- 8. ĐIỀU KHIỂN BẬT / TẮT MIC & CAM ---
+/**
+ * ==============================================================================
+ * Hardware Controls (Audio / Video Track Muters)
+ * ==============================================================================
+ */
+
+/**
+ * Toggles microphone track state and notifies network node
+ */
 function toggleMic() {
     if (!localStream) return;
     const audioTrack = localStream.getAudioTracks()[0];
@@ -304,6 +403,9 @@ function toggleMic() {
     }
 }
 
+/**
+ * Toggles camera track state and notifies network node
+ */
 function toggleCam() {
     if (!localStream) return;
     const videoTrack = localStream.getVideoTracks()[0];
@@ -320,11 +422,19 @@ function toggleCam() {
     }
 }
 
+/**
+ * Updates UI control button presentation for Microphone
+ * @param {boolean} on - Enabled state
+ */
 function updateMicUI(on) {
     document.getElementById('mic-label').innerText = on ? "Tắt Mic" : "Bật Mic";
     document.getElementById('mic-btn').classList.toggle('off', !on);
 }
 
+/**
+ * Updates UI control button presentation for Camera
+ * @param {boolean} on - Enabled state
+ */
 function updateCamUI(on) {
     document.getElementById('local-video').style.display = on ? 'block' : 'none';
     document.getElementById('local-avatar').style.display = on ? 'none' : 'flex';
@@ -332,9 +442,15 @@ function updateCamUI(on) {
     document.getElementById('cam-btn').classList.toggle('off', !on);
 }
 
-// --- 9. TÌM KIẾM YOUTUBE & XỬ LÝ MUSIC BOX QUEUE ---
+/**
+ * ==============================================================================
+ * YouTube Data API Integration & Playlist Queue Management
+ * ==============================================================================
+ */
 
-// A. Tìm bài hát qua Google YouTube Data API v3
+/**
+ * Queries YouTube Data API v3 for search terms matching Karaoke tracks
+ */
 async function searchYouTube() {
     const input = document.getElementById('song-search');
     const query = input.value.trim();
@@ -392,7 +508,11 @@ async function searchYouTube() {
     }
 }
 
-// B. Thêm bài hát vào Queue
+/**
+ * Appends selected video metadata payload into room queue node
+ * @param {string} videoId - YouTube Video ID
+ * @param {string} title - Media Title
+ */
 function addToQueue(videoId, title) {
     if (!currentRoomId) return;
     db.ref(`rooms/${currentRoomId}/queue`).push({
@@ -402,7 +522,10 @@ function addToQueue(videoId, title) {
     });
 }
 
-// C. Lắng nghe Queue bài hát (Đã loại bỏ mã đồng bộ tua phức tạp)
+/**
+ * Establishes real-time listener for current room playback queue state changes
+ * @param {string} roomId - Current room ID
+ */
 function listenForMusicBox(roomId) {
     db.ref(`rooms/${roomId}/queue`).on('value', (snapshot) => {
         const queueData = snapshot.val();
@@ -446,7 +569,11 @@ function listenForMusicBox(roomId) {
     });
 }
 
-// D. Khởi tạo / Phát Video YouTube đơn giản
+/**
+ * Instantiates or reloads YouTube iFrame Player API for video rendering
+ * @param {string} videoId - YouTube Video ID
+ * @param {string} title - Song title for display
+ */
 function playYouTubeVideo(videoId, title) {
     document.getElementById('selection-screen').classList.remove('active');
     document.getElementById('lyric-screen').classList.add('active');
@@ -459,7 +586,7 @@ function playYouTubeVideo(videoId, title) {
             videoId: videoId,
             playerVars: { 
                 'autoplay': 1, 
-                'controls': isAdmin ? 1 : 0, // Chỉ Admin mới hiện bộ điều khiển (Play/Pause/Tua) của YouTube
+                'controls': isAdmin ? 1 : 0,
                 'origin': window.location.origin || 'http://localhost'
             },
             host: 'https://www.youtube-nocookie.com',
@@ -468,11 +595,10 @@ function playYouTubeVideo(videoId, title) {
                     event.target.playVideo();
                 },
                 'onStateChange': (event) => {
-                    // Nếu không phải Admin mà cố tình bấm Pause/Stop, tự động phát tiếp
                     if (!isAdmin && event.data === YT.PlayerState.PAUSED) {
                         ytPlayer.playVideo();
                     }
-                    if (event.data === 0) { // Hết bài
+                    if (event.data === 0) {
                         skipSong();
                     }
                 }
@@ -484,7 +610,9 @@ function playYouTubeVideo(videoId, title) {
     }
 }
 
-// E. Bỏ qua / Dừng bài hát hiện tại (Chỉ Admin)
+/**
+ * Removes active song from queue (Restricted to Room Host/Admin)
+ */
 function skipSong() {
     if (!isAdmin) {
         alert("Chỉ Admin mới có quyền bỏ qua / dừng bài hát!");
@@ -494,6 +622,9 @@ function skipSong() {
     db.ref(`rooms/${currentRoomId}/queue/${currentSongKey}`).remove();
 }
 
+/**
+ * Gracefully terminates WebRTC connections, clears user state and reloads session
+ */
 function leaveRoom() {
     if (currentRoomId) db.ref(`rooms/${currentRoomId}/users/${myUserId}`).remove();
     if (localStream) localStream.getTracks().forEach(t => t.stop());

@@ -6,20 +6,19 @@
     <title>Music Box Online</title>
     <link rel="stylesheet" href="style.css">
     
-    <!-- Firebase SDK (v8) -->
+    <!-- Third-Party Libraries & SDKs -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <!-- PeerJS SDK -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <!-- YouTube IFrame API -->
     <script src="https://www.youtube.com/iframe_api"></script>
 </head>
 <body>
 
-    <!-- MÀN HÌNH ĐĂNG NHẬP / THAM GIA PHÒNG CHIA 2 CỘT -->
+    <!-- Authentication & Room Portal Container -->
     <div id="login-screen" class="screen-container">
         <div class="login-box-split">
-            <!-- CỘT TRÁI: CẤU HÌNH CÁ NHÂN & CHỌN AVATAR -->
+            
+            <!-- User Profile & Avatar Customization Section -->
             <div class="login-col left-col">
                 <h3>👤 Cấu hình cá nhân</h3>
                 
@@ -45,7 +44,7 @@
                 </div>
             </div>
 
-            <!-- CỘT PHẢI: NHẬP ID PHÒNG & THAM GIA -->
+            <!-- Room Access Control Section -->
             <div class="login-col right-col">
                 <h3>🎙️ Tham gia Music Box</h3>
 
@@ -71,7 +70,7 @@
         </div>
     </div>
 
-    <!-- POPUP XÁC THỰC ADMIN -->
+    <!-- Administrative Authentication Modal -->
     <div id="admin-modal" class="modal">
         <div class="modal-content">
             <span class="close-modal" onclick="closeAdminModal()">&times;</span>
@@ -83,16 +82,18 @@
         </div>
     </div>
 
-    <!-- MÀN HÌNH CHÍNH TRONG PHÒNG HÁT -->
+    <!-- Main Active Room View -->
     <div id="room-screen" class="screen-container" style="display: none;">
+        <!-- Header Controls & Room Metadata -->
         <div class="top-bar">
             <h2>Phòng: <span id="display-room-id">---</span></h2>
             <button class="btn btn-danger" onclick="leaveRoom()">Rời Phòng</button>
         </div>
 
-        <!-- MUSIC BOX -->
+        <!-- Music Box Subsystem -->
         <div id="music-box-container" class="music-box">
-            <!-- Màn hình Tìm & Thêm bài hát -->
+            
+            <!-- Song Search & Queue Interface -->
             <div id="selection-screen" class="mb-screen active">
                 <div class="mb-header">
                     <h3>🎵 Tìm Bài Hát Karaoke (YouTube)</h3>
@@ -102,19 +103,19 @@
                     </div>
                 </div>
 
-                <!-- Kết quả tìm kiếm -->
+                <!-- YouTube Query Results Grid -->
                 <div class="song-list" id="search-results">
                     <p class="placeholder-text">Nhập tên bài hát và nhấn Tìm để chọn bản Karaoke...</p>
                 </div>
 
-                <!-- Hàng chờ bài hát -->
+                <!-- Playlist Queue Status -->
                 <div class="queue-section">
                     <h4>📋 Hàng chờ bài hát (<span id="queue-count">0</span>)</h4>
                     <div id="queue-list" class="queue-list"></div>
                 </div>
             </div>
 
-            <!-- Màn hình Phát Karaoke Video -->
+            <!-- Video Player Output Interface -->
             <div id="lyric-screen" class="mb-screen">
                 <div class="lyric-header">
                     <span id="playing-song-info" class="playing-info">Đang phát: Chưa có bài hát</span>
@@ -126,7 +127,7 @@
             </div>
         </div>
 
-        <!-- DANH SÁCH NGƯỜI THAM GIA -->
+        <!-- Peer WebRTC Video Grid Area -->
         <div class="participants-grid" id="participants-container">
             <div class="user-card" id="local-user-card">
                 <video id="local-video" autoplay playsinline muted></video>
@@ -139,7 +140,7 @@
             </div>
         </div>
 
-        <!-- THANH ĐIỀU KHIỂN -->
+        <!-- Media Devices Control Toolbar -->
         <div class="controls-bar">
             <button id="mic-btn" class="btn btn-control" onclick="toggleMic()">
                 🎙️ <span id="mic-label">Tắt Mic</span>

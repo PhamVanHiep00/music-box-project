@@ -1,3 +1,7 @@
+/* ==========================================================================
+   1. CORE BASE STYLES & CSS RESET
+   ========================================================================== */
+
 * {
     box-sizing: border-box;
     margin: 0;
@@ -23,7 +27,10 @@ body {
     align-items: center;
 }
 
-/* GIAO DIỆN CHIA 2 CỘT MÀN HÌNH ĐĂNG NHẬP */
+/* ==========================================================================
+   2. AUTHENTICATION & ROOM JOINING INTERFACE
+   ========================================================================== */
+
 .login-box-split {
     display: flex;
     background: #1e1e2f;
@@ -78,7 +85,7 @@ body {
     outline: none;
 }
 
-/* KHUNG CHỌN AVATAR CUTE */
+/* --- Avatar Selector Grid --- */
 .avatar-selection-wrapper {
     display: flex;
     flex-direction: column;
@@ -123,6 +130,7 @@ body {
     transform: scale(1.1);
 }
 
+/* --- Action Buttons & Utilities --- */
 .button-group {
     display: flex;
     flex-direction: column;
@@ -159,7 +167,10 @@ body {
 
 .admin-link a:hover { color: #fff; }
 
-/* MODAL ADMIN */
+/* ==========================================================================
+   3. ADMINISTRATIVE MODAL DIALOG
+   ========================================================================== */
+
 .modal {
     display: none;
     position: fixed;
@@ -188,7 +199,10 @@ body {
     font-size: 1.5rem;
 }
 
-/* PHÒNG HÁT & MUSIC BOX */
+/* ==========================================================================
+   4. ACTIVE ROOM & MUSIC BOX CONTAINER
+   ========================================================================== */
+
 .top-bar {
     width: 100%;
     display: flex;
@@ -243,7 +257,7 @@ body {
     outline: none;
 }
 
-/* THAM SỐ PHẦN DANH SÁCH & TÌM KIẾM BÀI HÁT YOUTUBE */
+/* --- Search Results & Song Cards --- */
 .song-list {
     flex: 1;
     overflow-y: auto;
@@ -316,7 +330,7 @@ body {
     white-space: nowrap;
 }
 
-/* HÀNG CHỜ */
+/* --- Playback Queue Sub-Section --- */
 .queue-section {
     margin-top: 10px;
     border-top: 1px solid #333;
@@ -345,7 +359,7 @@ body {
     border: 1px solid #ff007f;
 }
 
-/* KHUNG PHÁT VIDEO KARAOKE YOUTUBE */
+/* --- Karaoke Player View --- */
 .lyric-header {
     display: flex;
     justify-content: space-between;
@@ -383,7 +397,10 @@ body {
     border: none;
 }
 
-/* PARTICIPANTS */
+/* ==========================================================================
+   5. WEBRTC PARTICIPANTS GRID & MEDIA CONTROLS
+   ========================================================================== */
+
 .participants-grid {
     display: flex;
     flex-wrap: wrap;
@@ -448,6 +465,10 @@ body {
 .controls-bar { display: flex; gap: 15px; }
 .btn-control { background: #2a2a40; color: #fff; padding: 10px 20px; border-radius: 20px; }
 .btn-control.off { background: #ff4757; }
+
+/* ==========================================================================
+   6. RESPONSIVE BREAKPOINTS
+   ========================================================================== */
 
 @media (max-width: 768px) {
     .login-box-split { flex-direction: column; }
