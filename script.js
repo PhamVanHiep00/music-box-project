@@ -410,7 +410,7 @@ function listenForMusicBox(roomId) {
         const keys = Object.keys(queueData);
         document.getElementById('queue-count').innerText = keys.length;
 
-        // Render danh sách các bài đang chờ tiếp theo
+        // Render danh sách hàng chờ
         keys.forEach((key, index) => {
             if (index > 0) {
                 const item = queueData[key];
@@ -421,22 +421,35 @@ function listenForMusicBox(roomId) {
             }
         });
 
-        // Tự động phát bài đầu tiên trong Hàng chờ
+        // Lấy bài hát đầu tiên
         const firstKey = keys[0];
         const firstSong = queueData[firstKey];
+
+        // Nếu bài hát chưa có mốc thời gian bắt đầu -> Ghi mốc thời gian hiện tại vào Firebase
+        if (!firstSong.startedAt) {
+            db.ref(`rooms/${roomId}/queue/${firstKey}`).update({
+                startedAt: Date.now()
+            });
+            return;
+        }
+
+        // Tính khoảng thời gian video đã phát (giây)
+        const elapsedSeconds = Math.max(0, (Date.now() - firstSong.startedAt) / 1000);
 
         if (currentVideoId !== firstSong.videoId) {
             currentVideoId = firstSong.videoId;
             currentSongKey = firstKey;
-            playYouTubeVideo(firstSong.videoId, firstSong.title);
+            
+            // Phát video và tua trực tiếp tới mốc thời gian thực tế
+            playYouTubeVideo(firstSong.videoId, firstSong.title, elapsedSeconds);
         }
     });
 }
 
-// D. Khởi tạo / Thay đổi Video phát YouTube
-function playYouTubeVideo(videoId, title) {
+// D. Khởi tạo / Thay đổi Video phát YouTube (Bao gồm Fix Error 153 & Đồng bộ thời gian)
+function playYouTubeVideo(videoId, title, startSeconds = 0) {
     document.getElementById('selection-screen').classList.remove('active');
-    document.getElementById('lyric-screen').classList.add('active');
+    document.getElementById('lyric-screen').classList.active ? null : document.getElementById('lyric-screen').classList.add('active');
     document.getElementById('playing-song-info').innerText = `🎤 Đang phát: ${title}`;
 
     if (!ytPlayer) {
@@ -444,18 +457,32 @@ function playYouTubeVideo(videoId, title) {
             height: '100%',
             width: '100%',
             videoId: videoId,
-            playerVars: { 'autoplay': 1, 'controls': 1 },
+            playerVars: { 
+                'autoplay': 1, 
+                'controls': 1,
+                'start': Math.floor(startSeconds),
+                'origin': window.location.origin || 'http://localhost'
+            },
+            host: 'https://www.youtube-nocookie.com',
             events: {
+                'onReady': (event) => {
+                    event.target.playVideo();
+                    if (startSeconds > 0) {
+                        event.target.seekTo(startSeconds, true);
+                    }
+                },
                 'onStateChange': (event) => {
-                    // event.data === 0 tương ứng với hết bài hát
-                    if (event.data === 0) {
+                    if (event.data === 0) { // Hết bài
                         skipSong();
                     }
                 }
             }
         });
     } else {
-        ytPlayer.loadVideoById(videoId);
+        ytPlayer.loadVideoById({
+            videoId: videoId,
+            startSeconds: Math.floor(startSeconds)
+        });
     }
 }
 
