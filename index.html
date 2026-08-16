@@ -9,36 +9,64 @@
     <!-- Firebase SDK (v8) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <!-- PeerJS SDK -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- YouTube IFrame API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
 </head>
 <body>
 
-    <!-- MÀN HÌNH ĐĂNG NHẬP / THAM GIA PHÒNG -->
+    <!-- MÀN HÌNH ĐĂNG NHẬP / THAM GIA PHÒNG CHIA 2 CỘT -->
     <div id="login-screen" class="screen-container">
-        <div class="card login-card">
-            <h2>🎙️ Music Box Room</h2>
-            
-            <div class="input-group">
-                <label for="user-name">Tên của bạn:</label>
-                <input type="text" id="user-name" placeholder="Nhập tên hiển thị..." required>
+        <div class="login-box-split">
+            <!-- CỘT TRÁI: CẤU HÌNH CÁ NHÂN & CHỌN AVATAR -->
+            <div class="login-col left-col">
+                <h3>👤 Cấu hình cá nhân</h3>
+                
+                <div class="input-group">
+                    <label for="user-name">Tên hiển thị:</label>
+                    <input type="text" id="user-name" placeholder="Nhập tên của bạn..." required>
+                </div>
+
+                <div class="avatar-selection-wrapper">
+                    <label>Chọn Avatar:</label>
+                    <div class="avatar-grid" id="avatar-grid">
+                        <div class="avatar-item selected" onclick="selectAvatar(this)">🐱</div>
+                        <div class="avatar-item" onclick="selectAvatar(this)">🐶</div>
+                        <div class="avatar-item" onclick="selectAvatar(this)">🦊</div>
+                        <div class="avatar-item" onclick="selectAvatar(this)">🐰</div>
+                        <div class="avatar-item" onclick="selectAvatar(this)">🐼</div>
+                        <div class="avatar-item" onclick="selectAvatar(this)">🐻</div>
+                        <div class="avatar-item" onclick="selectAvatar(this)">🐯</div>
+                        <div class="avatar-item" onclick="selectAvatar(this)">🐨</div>
+                        <div class="avatar-item" onclick="selectAvatar(this)">🦄</div>
+                        <div class="avatar-item" onclick="selectAvatar(this)">🐥</div>
+                    </div>
+                </div>
             </div>
 
-            <div class="input-group">
-                <label for="room-id">Mã phòng (Room ID):</label>
-                <input type="text" id="room-id" placeholder="Nhập ID phòng..." required>
-            </div>
+            <!-- CỘT PHẢI: NHẬP ID PHÒNG & THAM GIA -->
+            <div class="login-col right-col">
+                <h3>🎙️ Tham gia Music Box</h3>
 
-            <div class="input-group">
-                <label for="room-pass">Mật khẩu phòng:</label>
-                <input type="password" id="room-pass" placeholder="Nhập mật khẩu..." required>
-            </div>
+                <div class="input-group">
+                    <label for="room-id">Mã phòng (Room ID):</label>
+                    <input type="text" id="room-id" placeholder="Nhập ID phòng..." required>
+                </div>
 
-            <div class="button-group">
-                <button id="btn-join" class="btn btn-primary" onclick="joinRoom()">Vào Phòng</button>
-                <button id="btn-create-room" class="btn btn-success" style="display: none;" onclick="createRoom()">Tạo Phòng Mới (Admin)</button>
-            </div>
+                <div class="input-group">
+                    <label for="room-pass">Mật khẩu phòng:</label>
+                    <input type="password" id="room-pass" placeholder="Nhập mật khẩu..." required>
+                </div>
 
-            <div class="admin-link">
-                <a href="#" onclick="openAdminModal()">Bạn là Admin? Kích hoạt quyền tại đây</a>
+                <div class="button-group">
+                    <button id="btn-join" class="btn btn-primary" onclick="joinRoom()">Vào Phòng</button>
+                    <button id="btn-create-room" class="btn btn-success" style="display: none;" onclick="createRoom()">Tạo Phòng Mới (Admin)</button>
+                </div>
+
+                <div class="admin-link">
+                    <a href="#" onclick="openAdminModal()">Kích hoạt quyền Admin</a>
+                </div>
             </div>
         </div>
     </div>
@@ -57,76 +85,61 @@
 
     <!-- MÀN HÌNH CHÍNH TRONG PHÒNG HÁT -->
     <div id="room-screen" class="screen-container" style="display: none;">
-        <!-- Thanh thông tin trên cùng -->
         <div class="top-bar">
             <h2>Phòng: <span id="display-room-id">---</span></h2>
             <button class="btn btn-danger" onclick="leaveRoom()">Rời Phòng</button>
         </div>
 
-        <!-- MÀN HÌNH KHUNG MUSIC BOX (CHỌN BÀI / LYRIC) -->
+        <!-- MUSIC BOX -->
         <div id="music-box-container" class="music-box">
-            <!-- 1. Màn hình Bảng chọn bài hát -->
+            <!-- Màn hình Tìm & Thêm bài hát -->
             <div id="selection-screen" class="mb-screen active">
                 <div class="mb-header">
-                    <h3>🎵 Danh Sách Bài Hát Karaoke</h3>
-                    <input type="text" id="song-search" placeholder="🔍 Tìm bài hát hoặc ca sĩ..." onkeyup="filterSongs()">
+                    <h3>🎵 Tìm Bài Hát Karaoke (YouTube)</h3>
+                    <div class="search-box">
+                        <input type="text" id="song-search" placeholder="Gõ tên bài hát..." onkeypress="if(event.key === 'Enter') searchYouTube()">
+                        <button class="btn btn-primary" onclick="searchYouTube()">Tìm</button>
+                    </div>
                 </div>
-                <div class="song-list" id="song-list-container">
-                    <div class="song-item" onclick="startKaraoke('Bài Ca Hy Vọng', 'Trần Tiến')">
-                        <div class="song-info">
-                            <span class="song-title">Bài Ca Hy Vọng</span>
-                            <span class="song-artist">Trần Tiến</span>
-                        </div>
-                        <button class="btn-select">Chọn hát</button>
-                    </div>
-                    <div class="song-item" onclick="startKaraoke('Cơn Mưa Ngang Qua', 'Sơn Tùng M-TP')">
-                        <div class="song-info">
-                            <span class="song-title">Cơn Mưa Ngang Qua</span>
-                            <span class="song-artist">Sơn Tùng M-TP</span>
-                        </div>
-                        <button class="btn-select">Chọn hát</button>
-                    </div>
-                    <div class="song-item" onclick="startKaraoke('Nơi Tình Yêu Bắt Đầu', 'Bằng Kiều')">
-                        <div class="song-info">
-                            <span class="song-title">Nơi Tình Yêu Bắt Đầu</span>
-                            <span class="song-artist">Bằng Kiều</span>
-                        </div>
-                        <button class="btn-select">Chọn hát</button>
-                    </div>
+
+                <!-- Kết quả tìm kiếm -->
+                <div class="song-list" id="search-results">
+                    <p class="placeholder-text">Nhập tên bài hát và nhấn Tìm để chọn bản Karaoke...</p>
+                </div>
+
+                <!-- Hàng chờ bài hát -->
+                <div class="queue-section">
+                    <h4>📋 Hàng chờ bài hát (<span id="queue-count">0</span>)</h4>
+                    <div id="queue-list" class="queue-list"></div>
                 </div>
             </div>
 
-            <!-- 2. Màn hình Hiển thị Lyric khi đang hát -->
+            <!-- Màn hình Phát Karaoke Video -->
             <div id="lyric-screen" class="mb-screen">
                 <div class="lyric-header">
-                    <span id="playing-song-info" class="playing-info">Đang hát: ...</span>
-                    <button class="btn-change-song" onclick="returnToSelection()">🔄 Đổi Bài Hát</button>
+                    <span id="playing-song-info" class="playing-info">Đang phát: Chưa có bài hát</span>
+                    <button class="btn-change-song" onclick="skipSong()">⏭️ Bài tiếp theo</button>
                 </div>
-                <div class="lyric-display-area" id="lyric-box">
-                    <p class="lyric-line past">Lời bài hát vừa hát xong...</p>
-                    <p class="lyric-line active">🎤 Dòng lời karaoke đang hát chính ở đây...</p>
-                    <p class="lyric-line upcoming">Dòng lời hát chuẩn bị tiếp theo...</p>
+                <div class="video-display-area">
+                    <div id="youtube-player"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Khung hiển thị danh sách video người tham gia -->
+        <!-- DANH SÁCH NGƯỜI THAM GIA -->
         <div class="participants-grid" id="participants-container">
-            <!-- Video của bản thân -->
             <div class="user-card" id="local-user-card">
                 <video id="local-video" autoplay playsinline muted></video>
-                <div id="local-avatar" class="user-avatar" style="display: none;">U</div>
-                
+                <div id="local-avatar" class="user-avatar" style="display: none;">🐱</div>
                 <div class="status-badge">
                     <span id="local-mic-badge" class="badge-icon">🎙️</span>
                     <span id="local-cam-badge" class="badge-icon">📹</span>
                 </div>
-
                 <span class="user-name" id="local-name-tag">Bạn</span>
             </div>
         </div>
 
-        <!-- Thanh điều khiển phía dưới -->
+        <!-- THANH ĐIỀU KHIỂN -->
         <div class="controls-bar">
             <button id="mic-btn" class="btn btn-control" onclick="toggleMic()">
                 🎙️ <span id="mic-label">Tắt Mic</span>
@@ -137,8 +150,6 @@
         </div>
     </div>
 
-    <!-- Dán thêm dòng này dưới thẻ script của Firebase trong file index.html -->
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>  
     <script src="script.js"></script>
 </body>
 </html>

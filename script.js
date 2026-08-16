@@ -14,16 +14,23 @@ const db = firebase.database();
 
 const MY_ADMIN_CODE = "admin123";
 
-// --- 2. BIẾN PHÒNG & PEERJS ---
+// 🔑 YOUTUBE DATA API V3 KEY CỦA BẠN
+const YOUTUBE_API_KEY = "AIzaSyBy9wjn6KtQMurf7P_aYtXNfwfJKzq52xA";
+
+// --- 2. BIẾN PHÒNG, AVATAR, PEERJS & YOUTUBE ---
 let localStream = null;
 let isMicOn = true;
 let isCamOn = true;
+let selectedAvatar = "🐱"; 
 let currentRoomId = null;
 let myUserId = "user_" + Math.random().toString(36).substr(2, 6);
 let peer = null;
 let calls = {};
 
-// Cấu hình ICE Server bao gồm cả STUN & TURN
+let ytPlayer = null;
+let currentSongKey = null;
+let currentVideoId = null;
+
 const peerConfig = {
     config: {
         iceServers: [
@@ -43,7 +50,14 @@ const peerConfig = {
     }
 };
 
-// --- 3. QUẢN LÝ POPUP ADMIN ---
+// --- 3. CHỌN AVATAR ---
+function selectAvatar(element) {
+    document.querySelectorAll('.avatar-item').forEach(item => item.classList.remove('selected'));
+    element.classList.add('selected');
+    selectedAvatar = element.innerText;
+}
+
+// --- 4. QUẢN LÝ POPUP ADMIN ---
 function openAdminModal() {
     document.getElementById('admin-modal').style.display = 'flex';
 }
@@ -62,7 +76,7 @@ function handleAdminSubmit(e) {
     }
 }
 
-// --- 4. THAM GIA & TẠO PHÒNG ---
+// --- 5. THAM GIA & TẠO PHÒNG ---
 async function createRoom() {
     const roomId = document.getElementById('room-id').value.trim();
     const roomPass = document.getElementById('room-pass').value.trim();
@@ -93,12 +107,14 @@ async function joinRoom() {
     enterRoomProcess(roomId, userName);
 }
 
-// --- 5. TIẾN TRÌNH TRONG PHÒNG ---
+// --- 6. TIẾN TRÌNH TRONG PHÒNG ---
 async function enterRoomProcess(roomId, userName) {
     currentRoomId = roomId;
 
     document.getElementById('display-room-id').innerText = roomId;
     document.getElementById('local-name-tag').innerText = userName + " (Bạn)";
+    document.getElementById('local-avatar').innerText = selectedAvatar;
+
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('room-screen').style.display = 'flex';
 
@@ -113,30 +129,37 @@ async function initMedia() {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         const localVid = document.getElementById('local-video');
         localVid.srcObject = localStream;
-        localVid.muted = true; // Luôn mute camera của chính mình
+        localVid.muted = true;
+        isMicOn = true;
+        isCamOn = true;
     } catch (e) {
-        console.warn("Chưa cấp quyền Mic/Cam đầy đủ:", e);
+        console.warn("Chưa cấp quyền Mic/Cam:", e);
+        isMicOn = false;
+        isCamOn = false;
     }
+    updateMicUI(isMicOn);
+    updateCamUI(isCamOn);
 }
 
-// --- 6. KHỞI TẠO KẾT NỐI PEERJS (XỬ LÝ VIDEO/AUDIO CHUẨN) ---
+// --- 7. KẾT NỐI PEERJS ---
 function initPeerJS(userName) {
-    // Khởi tạo Peer với ID ngẫu nhiên
     peer = new Peer(myUserId, peerConfig);
 
     peer.on('open', (id) => {
-        // Đăng ký thông tin vào Firebase
         const myUserRef = db.ref(`rooms/${currentRoomId}/users/${myUserId}`);
-        myUserRef.set({ name: userName, isMicOn: true, isCamOn: true });
+        myUserRef.set({ 
+            name: userName, 
+            avatar: selectedAvatar,
+            isMicOn: isMicOn, 
+            isCamOn: isCamOn 
+        });
         myUserRef.onDisconnect().remove();
 
-        // Lắng nghe người dùng khác
         listenForUsers();
     });
 
-    // Lắng nghe cuộc gọi đến (khi người khác gọi cho mình)
     peer.on('call', (call) => {
-        call.answer(localStream); // Trả lời cuộc gọi bằng local stream
+        call.answer(localStream);
         
         call.on('stream', (remoteStream) => {
             addRemoteStream(call.peer, remoteStream);
@@ -154,9 +177,9 @@ function listenForUsers() {
         const userData = snapshot.val();
 
         if (userId !== myUserId) {
-            createRemoteUserCard(userId, userData.name);
+            createRemoteUserCard(userId, userData.name, userData.avatar || "👤");
+            updateUserStatusUI(userId, userData.isMicOn, userData.isCamOn);
             
-            // Gọi cho người vừa vào phòng
             if (localStream) {
                 const call = peer.call(userId, localStream);
                 call.on('stream', (remoteStream) => {
@@ -165,6 +188,12 @@ function listenForUsers() {
                 calls[userId] = call;
             }
         }
+    });
+
+    usersRef.on('child_changed', (snapshot) => {
+        const userId = snapshot.key;
+        const userData = snapshot.val();
+        updateUserStatusUI(userId, userData.isMicOn, userData.isCamOn);
     });
 
     usersRef.on('child_removed', (snapshot) => {
@@ -184,14 +213,13 @@ function addRemoteStream(userId, stream) {
         remoteVideo.autoplay = true;
         remoteVideo.playsInline = true;
         
-        // Tự động phát video & nghe tiếng
         remoteVideo.play().catch(() => {
             window.addEventListener('click', () => remoteVideo.play(), { once: true });
         });
     }
 }
 
-function createRemoteUserCard(userId, userName) {
+function createRemoteUserCard(userId, userName, avatar) {
     if (document.getElementById(`card-${userId}`)) return;
 
     const container = document.getElementById('participants-container');
@@ -201,7 +229,7 @@ function createRemoteUserCard(userId, userName) {
 
     userCard.innerHTML = `
         <video id="video-${userId}" class="user-video" autoplay playsinline></video>
-        <div id="avatar-${userId}" class="user-avatar" style="display:none;">${userName.charAt(0).toUpperCase()}</div>
+        <div id="avatar-${userId}" class="user-avatar" style="display:none;">${avatar}</div>
         <div class="status-badge">
             <span id="mic-badge-${userId}" class="badge-icon">🎙️</span>
             <span id="cam-badge-${userId}" class="badge-icon">📹</span>
@@ -216,14 +244,49 @@ function removeRemoteUserCard(userId) {
     if (card) card.remove();
 }
 
-// --- 7. ĐIỀU KHIỂN BẬT / TẮT MIC & CAM ---
+function updateUserStatusUI(userId, micActive, camActive) {
+    let micBadge, camBadge, remoteVideo, remoteAvatar;
+
+    if (userId === myUserId) {
+        micBadge = document.getElementById('local-mic-badge');
+        camBadge = document.getElementById('local-cam-badge');
+    } else {
+        micBadge = document.getElementById(`mic-badge-${userId}`);
+        camBadge = document.getElementById(`cam-badge-${userId}`);
+        remoteVideo = document.getElementById(`video-${userId}`);
+        remoteAvatar = document.getElementById(`avatar-${userId}`);
+    }
+
+    if (micBadge) {
+        micBadge.innerText = micActive ? "🎙️" : "🔇";
+        micBadge.classList.toggle('off', !micActive);
+    }
+
+    if (camBadge) {
+        camBadge.innerText = camActive ? "📹" : "🚫";
+        camBadge.classList.toggle('off', !camActive);
+    }
+
+    if (userId !== myUserId && remoteVideo && remoteAvatar) {
+        remoteVideo.style.display = camActive ? 'block' : 'none';
+        remoteAvatar.style.display = camActive ? 'none' : 'flex';
+    }
+}
+
+// --- 8. ĐIỀU KHIỂN BẬT / TẮT MIC & CAM ---
 function toggleMic() {
     if (!localStream) return;
     const audioTrack = localStream.getAudioTracks()[0];
     if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         isMicOn = audioTrack.enabled;
+        
         updateMicUI(isMicOn);
+        updateUserStatusUI(myUserId, isMicOn, isCamOn);
+
+        if (currentRoomId) {
+            db.ref(`rooms/${currentRoomId}/users/${myUserId}`).update({ isMicOn: isMicOn });
+        }
     }
 }
 
@@ -233,7 +296,13 @@ function toggleCam() {
     if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         isCamOn = videoTrack.enabled;
+
         updateCamUI(isCamOn);
+        updateUserStatusUI(myUserId, isMicOn, isCamOn);
+
+        if (currentRoomId) {
+            db.ref(`rooms/${currentRoomId}/users/${myUserId}`).update({ isCamOn: isCamOn });
+        }
     }
 }
 
@@ -249,35 +318,151 @@ function updateCamUI(on) {
     document.getElementById('cam-btn').classList.toggle('off', !on);
 }
 
-// --- 8. CHỌN BÀI HÁT & LYRIC ---
-function filterSongs() {
-    const query = document.getElementById('song-search').value.toLowerCase();
-    document.querySelectorAll('.song-item').forEach(item => {
-        const title = item.querySelector('.song-title').innerText.toLowerCase();
-        item.style.display = title.includes(query) ? 'flex' : 'none';
+// --- 9. TÌM KIẾM YOUTUBE & XỬ LÝ MUSIC BOX QUEUE ---
+
+// A. Tìm bài hát qua Google YouTube Data API v3
+async function searchYouTube() {
+    const input = document.getElementById('song-search');
+    const query = input.value.trim();
+    if (!query) return;
+
+    const resultsContainer = document.getElementById('search-results');
+    resultsContainer.innerHTML = '<p class="placeholder-text">🔍 Đang tìm kiếm trên YouTube...</p>';
+
+    let searchQuery = query;
+    if (!searchQuery.toLowerCase().includes('karaoke')) {
+        searchQuery += ' karaoke';
+    }
+
+    try {
+        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=6&q=${encodeURIComponent(searchQuery)}&type=video&key=${YOUTUBE_API_KEY}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error.message);
+        }
+
+        resultsContainer.innerHTML = '';
+        const items = data.items;
+
+        if (!items || items.length === 0) {
+            resultsContainer.innerHTML = '<p class="placeholder-text">Không tìm thấy bài hát nào!</p>';
+            return;
+        }
+
+        items.forEach(item => {
+            const videoId = item.id.videoId;
+            const titleEscaped = item.snippet.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const channelTitle = item.snippet.channelTitle;
+            const thumbUrl = item.snippet.thumbnails.default.url;
+
+            const card = document.createElement('div');
+            card.className = 'song-card';
+            card.innerHTML = `
+                <div class="song-card-content">
+                    <img src="${thumbUrl}" alt="thumb">
+                    <div class="song-info">
+                        <span class="song-title">${item.snippet.title}</span>
+                        <span class="song-artist">${channelTitle}</span>
+                    </div>
+                </div>
+                <button class="btn-select" onclick="addToQueue('${videoId}', '${titleEscaped}')">+ Thêm</button>
+            `;
+            resultsContainer.appendChild(card);
+        });
+
+    } catch (err) {
+        console.error("Lỗi tìm kiếm YouTube:", err);
+        resultsContainer.innerHTML = `<p class="placeholder-text" style="color:#ff4757;">❌ Lỗi tìm kiếm: ${err.message}</p>`;
+    }
+}
+
+// B. Thêm bài hát vào Node queue của phòng trên Firebase
+function addToQueue(videoId, title) {
+    if (!currentRoomId) return;
+    db.ref(`rooms/${currentRoomId}/queue`).push({
+        videoId: videoId,
+        title: title,
+        addedBy: myUserId
     });
 }
 
-function startKaraoke(title, artist) {
-    db.ref(`rooms/${currentRoomId}/currentSong`).set({ title, artist, isPlaying: true });
-}
-
-function returnToSelection() {
-    db.ref(`rooms/${currentRoomId}/currentSong`).set({ isPlaying: false });
-}
-
+// C. Lắng nghe cập nhật Queue và đồng bộ bài phát giữa các máy
 function listenForMusicBox(roomId) {
-    db.ref(`rooms/${roomId}/currentSong`).on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data && data.isPlaying) {
-            document.getElementById('selection-screen').classList.remove('active');
-            document.getElementById('lyric-screen').classList.add('active');
-            document.getElementById('playing-song-info').innerText = `🎤 Đang hát: ${data.title} - ${data.artist}`;
-        } else {
+    db.ref(`rooms/${roomId}/queue`).on('value', (snapshot) => {
+        const queueData = snapshot.val();
+        const queueListDiv = document.getElementById('queue-list');
+        queueListDiv.innerHTML = '';
+
+        if (!queueData) {
+            document.getElementById('queue-count').innerText = "0";
             document.getElementById('lyric-screen').classList.remove('active');
             document.getElementById('selection-screen').classList.add('active');
+            if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+                ytPlayer.stopVideo();
+            }
+            currentVideoId = null;
+            currentSongKey = null;
+            return;
+        }
+
+        const keys = Object.keys(queueData);
+        document.getElementById('queue-count').innerText = keys.length;
+
+        // Render danh sách các bài đang chờ tiếp theo
+        keys.forEach((key, index) => {
+            if (index > 0) {
+                const item = queueData[key];
+                const badge = document.createElement('div');
+                badge.className = 'queue-item';
+                badge.innerText = `${index}. ${item.title}`;
+                queueListDiv.appendChild(badge);
+            }
+        });
+
+        // Tự động phát bài đầu tiên trong Hàng chờ
+        const firstKey = keys[0];
+        const firstSong = queueData[firstKey];
+
+        if (currentVideoId !== firstSong.videoId) {
+            currentVideoId = firstSong.videoId;
+            currentSongKey = firstKey;
+            playYouTubeVideo(firstSong.videoId, firstSong.title);
         }
     });
+}
+
+// D. Khởi tạo / Thay đổi Video phát YouTube
+function playYouTubeVideo(videoId, title) {
+    document.getElementById('selection-screen').classList.remove('active');
+    document.getElementById('lyric-screen').classList.add('active');
+    document.getElementById('playing-song-info').innerText = `🎤 Đang phát: ${title}`;
+
+    if (!ytPlayer) {
+        ytPlayer = new YT.Player('youtube-player', {
+            height: '100%',
+            width: '100%',
+            videoId: videoId,
+            playerVars: { 'autoplay': 1, 'controls': 1 },
+            events: {
+                'onStateChange': (event) => {
+                    // event.data === 0 tương ứng với hết bài hát
+                    if (event.data === 0) {
+                        skipSong();
+                    }
+                }
+            }
+        });
+    } else {
+        ytPlayer.loadVideoById(videoId);
+    }
+}
+
+// E. Bỏ qua bài hát hiện tại
+function skipSong() {
+    if (!currentRoomId || !currentSongKey) return;
+    db.ref(`rooms/${currentRoomId}/queue/${currentSongKey}`).remove();
 }
 
 function leaveRoom() {
