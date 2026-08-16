@@ -1,0 +1,346 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #12121e;
+    color: #ffffff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.screen-container {
+    width: 100%;
+    max-width: 1200px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* CARDS & INPUTS */
+.login-card {
+    background: #1e1e2f;
+    padding: 30px;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.input-group label {
+    font-size: 0.9rem;
+    color: #ccc;
+}
+
+.input-group input, .modal-content input {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #3a3a5a;
+    background: #11111d;
+    color: #fff;
+    outline: none;
+}
+
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.btn {
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-primary { background: #007bff; color: white; }
+.btn-primary:hover { background: #0056b3; }
+
+.btn-success { background: #28a745; color: white; }
+.btn-success:hover { background: #218838; }
+
+.btn-danger { background: #dc3545; color: white; }
+.btn-danger:hover { background: #c82333; }
+
+.admin-link {
+    text-align: center;
+    margin-top: 10px;
+}
+
+.admin-link a {
+    color: #888;
+    font-size: 0.8rem;
+    text-decoration: none;
+}
+
+.admin-link a:hover { color: #fff; }
+
+/* MODAL ADMIN */
+.modal {
+    display: none;
+    position: fixed;
+    top:0; left:0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: #1e1e2f;
+    padding: 25px;
+    border-radius: 12px;
+    width: 300px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.close-modal {
+    position: absolute;
+    top: 10px; right: 15px;
+    cursor: pointer;
+    font-size: 1.5rem;
+}
+
+/* PHÒNG HÁT & MUSIC BOX */
+.top-bar {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.music-box {
+    width: 100%;
+    height: 320px;
+    background: #1e1e2f;
+    border-radius: 16px;
+    border: 2px solid #3a3a5a;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    margin-bottom: 20px;
+    overflow: hidden;
+    position: relative;
+}
+
+.mb-screen {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    padding: 20px;
+}
+
+.mb-screen.active {
+    display: flex;
+}
+
+.mb-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.mb-header h3 {
+    color: #ff007f;
+    font-size: 1.1rem;
+}
+
+.mb-header input {
+    width: 55%;
+    padding: 8px 14px;
+    border-radius: 20px;
+    border: 1px solid #444;
+    background: #11111d;
+    color: #fff;
+}
+
+.song-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.song-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #2a2a40;
+    padding: 12px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.song-item:hover {
+    background: #383858;
+}
+
+.song-title {
+    font-weight: bold;
+    color: #00f0ff;
+    display: block;
+}
+
+.song-artist {
+    font-size: 0.85rem;
+    color: #aaa;
+}
+
+.btn-select {
+    background: linear-gradient(135deg, #ff007f, #7928ca);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 15px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.lyric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #333;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.playing-info {
+    font-weight: bold;
+    color: #00f0ff;
+}
+
+.btn-change-song {
+    background: #33334d;
+    color: #fff;
+    border: 1px solid #555;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+}
+
+.btn-change-song:hover {
+    background: #ff4757;
+}
+
+.lyric-display-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 15px;
+}
+
+.lyric-line.past { color: #666; font-size: 0.95rem; }
+.lyric-line.active { color: #ffeb3b; font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px rgba(255, 235, 59, 0.5); }
+.lyric-line.upcoming { color: #aaa; font-size: 0.95rem; }
+
+/* KHUNG CAMERA NGƯỜI THAM GIA (ĐÃ TĂNG KÍCH THƯỚC) */
+.participants-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.user-card {
+    width: 320px; /* Đã tăng kích thước chiều rộng */
+    height: 220px; /* Đã tăng kích thước chiều cao */
+    background: #2a2a40;
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    border: 1px solid #3a3a5a;
+}
+
+.user-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-avatar {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: #7928ca;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.status-badge {
+    position: absolute;
+    top: 10px; right: 10px;
+    display: flex;
+    gap: 6px;
+    background: rgba(0,0,0,0.6);
+    padding: 4px 8px;
+    border-radius: 12px;
+}
+
+.badge-icon {
+    font-size: 1.1rem;
+}
+
+.badge-icon.off { opacity: 0.3; }
+
+.user-name {
+    position: absolute;
+    bottom: 10px; left: 10px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+
+.controls-bar {
+    display: flex;
+    gap: 15px;
+}
+
+.btn-control {
+    background: #2a2a40;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 20px;
+}
+
+.btn-control.off {
+    background: #ff4757;
+}

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Box Online</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Firebase SDK (v8) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+<body>
+
+    <!-- MÀN HÌNH ĐĂNG NHẬP / THAM GIA PHÒNG -->
+    <div id="login-screen" class="screen-container">
+        <div class="card login-card">
+            <h2>🎙️ Music Box Room</h2>
+            
+            <div class="input-group">
+                <label for="user-name">Tên của bạn:</label>
+                <input type="text" id="user-name" placeholder="Nhập tên hiển thị..." required>
+            </div>
+
+            <div class="input-group">
+                <label for="room-id">Mã phòng (Room ID):</label>
+                <input type="text" id="room-id" placeholder="Nhập ID phòng..." required>
+            </div>
+
+            <div class="input-group">
+                <label for="room-pass">Mật khẩu phòng:</label>
+                <input type="password" id="room-pass" placeholder="Nhập mật khẩu..." required>
+            </div>
+
+            <div class="button-group">
+                <button id="btn-join" class="btn btn-primary" onclick="joinRoom()">Vào Phòng</button>
+                <button id="btn-create-room" class="btn btn-success" style="display: none;" onclick="createRoom()">Tạo Phòng Mới (Admin)</button>
+            </div>
+
+            <div class="admin-link">
+                <a href="#" onclick="openAdminModal()">Bạn là Admin? Kích hoạt quyền tại đây</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- POPUP XÁC THỰC ADMIN -->
+    <div id="admin-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeAdminModal()">&times;</span>
+            <h3>🔐 Nhập Admin Code</h3>
+            <form onsubmit="handleAdminSubmit(event)">
+                <input type="password" id="admin-code-input" placeholder="Nhập mã Admin..." required>
+                <button type="submit" class="btn btn-primary">Xác nhận</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MÀN HÌNH CHÍNH TRONG PHÒNG HÁT -->
+    <div id="room-screen" class="screen-container" style="display: none;">
+        <!-- Thanh thông tin trên cùng -->
+        <div class="top-bar">
+            <h2>Phòng: <span id="display-room-id">---</span></h2>
+            <button class="btn btn-danger" onclick="leaveRoom()">Rời Phòng</button>
+        </div>
+
+        <!-- MÀN HÌNH KHUNG MUSIC BOX (CHỌN BÀI / LYRIC) -->
+        <div id="music-box-container" class="music-box">
+            <!-- 1. Màn hình Bảng chọn bài hát -->
+            <div id="selection-screen" class="mb-screen active">
+                <div class="mb-header">
+                    <h3>🎵 Danh Sách Bài Hát Karaoke</h3>
+                    <input type="text" id="song-search" placeholder="🔍 Tìm bài hát hoặc ca sĩ..." onkeyup="filterSongs()">
+                </div>
+                <div class="song-list" id="song-list-container">
+                    <div class="song-item" onclick="startKaraoke('Bài Ca Hy Vọng', 'Trần Tiến')">
+                        <div class="song-info">
+                            <span class="song-title">Bài Ca Hy Vọng</span>
+                            <span class="song-artist">Trần Tiến</span>
+                        </div>
+                        <button class="btn-select">Chọn hát</button>
+                    </div>
+                    <div class="song-item" onclick="startKaraoke('Cơn Mưa Ngang Qua', 'Sơn Tùng M-TP')">
+                        <div class="song-info">
+                            <span class="song-title">Cơn Mưa Ngang Qua</span>
+                            <span class="song-artist">Sơn Tùng M-TP</span>
+                        </div>
+                        <button class="btn-select">Chọn hát</button>
+                    </div>
+                    <div class="song-item" onclick="startKaraoke('Nơi Tình Yêu Bắt Đầu', 'Bằng Kiều')">
+                        <div class="song-info">
+                            <span class="song-title">Nơi Tình Yêu Bắt Đầu</span>
+                            <span class="song-artist">Bằng Kiều</span>
+                        </div>
+                        <button class="btn-select">Chọn hát</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Màn hình Hiển thị Lyric khi đang hát -->
+            <div id="lyric-screen" class="mb-screen">
+                <div class="lyric-header">
+                    <span id="playing-song-info" class="playing-info">Đang hát: ...</span>
+                    <button class="btn-change-song" onclick="returnToSelection()">🔄 Đổi Bài Hát</button>
+                </div>
+                <div class="lyric-display-area" id="lyric-box">
+                    <p class="lyric-line past">Lời bài hát vừa hát xong...</p>
+                    <p class="lyric-line active">🎤 Dòng lời karaoke đang hát chính ở đây...</p>
+                    <p class="lyric-line upcoming">Dòng lời hát chuẩn bị tiếp theo...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Khung hiển thị danh sách video người tham gia -->
+        <div class="participants-grid" id="participants-container">
+            <!-- Video của bản thân -->
+            <div class="user-card" id="local-user-card">
+                <video id="local-video" autoplay playsinline muted></video>
+                <div id="local-avatar" class="user-avatar" style="display: none;">U</div>
+                
+                <div class="status-badge">
+                    <span id="local-mic-badge" class="badge-icon">🎙️</span>
+                    <span id="local-cam-badge" class="badge-icon">📹</span>
+                </div>
+
+                <span class="user-name" id="local-name-tag">Bạn</span>
+            </div>
+        </div>
+
+        <!-- Thanh điều khiển phía dưới -->
+        <div class="controls-bar">
+            <button id="mic-btn" class="btn btn-control" onclick="toggleMic()">
+                🎙️ <span id="mic-label">Tắt Mic</span>
+            </button>
+            <button id="cam-btn" class="btn btn-control" onclick="toggleCam()">
+                📹 <span id="cam-label">Tắt Cam</span>
+            </button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
