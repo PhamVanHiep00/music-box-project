@@ -30,8 +30,9 @@ let calls = {};
 let ytPlayer = null;
 let currentSongKey = null;
 let currentVideoId = null;
+let hasSynced = false; // Cờ đánh dấu đã tua đồng bộ xong bài hát hiện tại chưa
 
-// Biến tính toán khoảng lệch thời gian giữa Máy tính & Server Firebase
+// Lệch thời gian Server
 let serverTimeOffset = 0;
 db.ref('.info/serverTimeOffset').on('value', (snapshot) => {
     serverTimeOffset = snapshot.val() || 0;
@@ -394,7 +395,7 @@ function addToQueue(videoId, title) {
     });
 }
 
-// C. Lắng nghe Queue & Đồng bộ mốc thời gian chuẩn Server
+// C. Lắng nghe Queue & Đồng bộ mốc thời gian
 function listenForMusicBox(roomId) {
     db.ref(`rooms/${roomId}/queue`).on('value', (snapshot) => {
         const queueData = snapshot.val();
@@ -429,7 +430,7 @@ function listenForMusicBox(roomId) {
         const firstKey = keys[0];
         const firstSong = queueData[firstKey];
 
-        // Tạo timestamp chuẩn của Server Firebase cho bài hát mới
+        // 1. Tạo timestamp chuẩn của Server Firebase cho bài hát mới
         if (!firstSong.startedAt) {
             db.ref(`rooms/${roomId}/queue/${firstKey}`).update({
                 startedAt: firebase.database.ServerValue.TIMESTAMP
@@ -437,20 +438,21 @@ function listenForMusicBox(roomId) {
             return;
         }
 
-        // Tính thời gian thực tế đã phát dựa theo Server Time
+        // 2. Tính thời gian thực tế đã trôi qua
         const currentServerTime = Date.now() + serverTimeOffset;
         const elapsedSeconds = Math.max(0, (currentServerTime - firstSong.startedAt) / 1000);
 
         if (currentVideoId !== firstSong.videoId) {
             currentVideoId = firstSong.videoId;
             currentSongKey = firstKey;
+            hasSynced = false; // Đặt lại trạng thái chưa đồng bộ cho bài hát mới
             
             playYouTubeVideo(firstSong.videoId, firstSong.title, elapsedSeconds);
         }
     });
 }
 
-// D. Khởi tạo / Thay đổi Video phát YouTube & Tua đúng vị trí
+// D. Khởi tạo / Phát Video YouTube và Đồng bộ ĐÚNG 1 LẦN DUY NHẤT
 function playYouTubeVideo(videoId, title, startSeconds = 0) {
     document.getElementById('selection-screen').classList.remove('active');
     document.getElementById('lyric-screen').classList.add('active');
@@ -473,18 +475,16 @@ function playYouTubeVideo(videoId, title, startSeconds = 0) {
             events: {
                 'onReady': (event) => {
                     event.target.playVideo();
-                    if (seekTime > 0) {
-                        event.target.seekTo(seekTime, true);
-                    }
                 },
                 'onStateChange': (event) => {
-                    // Khi video thực sự bắt đầu chạy (PLAYING), tua lại 1 lần nữa để đảm bảo đồng bộ
-                    if (event.data === YT.PlayerState.PLAYING) {
-                        if (seekTime > 0 && Math.abs(event.target.getCurrentTime() - seekTime) > 3) {
+                    // CHỈ TUA ĐỒNG BỘ 1 LẦN DUY NHẤT KHI BẮT ĐẦU PHÁT (TRÁNH LẶP)
+                    if (event.data === YT.PlayerState.PLAYING && !hasSynced) {
+                        hasSynced = true; // Đánh dấu đã tua xong
+                        if (seekTime > 2) {
                             event.target.seekTo(seekTime, true);
                         }
                     }
-                    if (event.data === 0) { // Hết bài
+                    if (event.data === 0) { // Hết bài (ENDED)
                         skipSong();
                     }
                 }
