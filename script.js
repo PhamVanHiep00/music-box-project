@@ -48,6 +48,7 @@ let calls = {};
 let ytPlayer = null;
 let currentSongKey = null;
 let currentVideoId = null;
+let currentVolume = 100; // Mặc định âm lượng 100%
 
 // PeerJS ICE Server Topology Configuration
 const peerConfig = {
@@ -350,7 +351,7 @@ function toggleCam() {
         isCamOn = videoTrack.enabled;
 
         updateCamUI(isCamOn);
-        updateUserStatusUI(myUserId, isMicOn, isCamOn);
+        updateUserStatusUI(myUserId, isCamOn, isCamOn);
 
         if (currentRoomId) {
             db.ref(`rooms/${currentRoomId}/users/${myUserId}`).update({ isCamOn: isCamOn });
@@ -503,6 +504,7 @@ function playYouTubeVideo(videoId, title) {
             host: 'https://www.youtube-nocookie.com',
             events: {
                 'onReady': (event) => {
+                    event.target.setVolume(currentVolume);
                     event.target.playVideo();
                 },
                 'onStateChange': (event) => {
@@ -514,7 +516,17 @@ function playYouTubeVideo(videoId, title) {
         });
     } else {
         ytPlayer.loadVideoById(videoId);
+        ytPlayer.setVolume(currentVolume);
         ytPlayer.playVideo();
+    }
+}
+
+// Hàm thay đổi âm lượng YouTube Player
+function setVolume(val) {
+    currentVolume = parseInt(val, 10);
+    document.getElementById('volume-val').innerText = `${currentVolume}%`;
+    if (ytPlayer && typeof ytPlayer.setVolume === 'function') {
+        ytPlayer.setVolume(currentVolume);
     }
 }
 

@@ -119,7 +119,16 @@
             <div id="lyric-screen" class="mb-screen">
                 <div class="lyric-header">
                     <span id="playing-song-info" class="playing-info">Đang phát: Chưa có bài hát</span>
-                    <button id="btn-skip-song" class="btn-change-song" onclick="skipSong()">⏭️ Bài tiếp theo</button>
+                    
+                    <!-- Music Box Volume Control & Skip Section -->
+                    <div class="lyric-controls">
+                        <div class="volume-control">
+                            <span>🔊</span>
+                            <input type="range" id="volume-slider" min="0" max="100" value="100" oninput="setVolume(this.value)">
+                            <span id="volume-val">100%</span>
+                        </div>
+                        <button id="btn-skip-song" class="btn-change-song" onclick="skipSong()">⏭️ Bài tiếp theo</button>
+                    </div>
                 </div>
                 <div class="video-display-area">
                     <div id="youtube-player"></div>
